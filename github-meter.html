@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Contribution Meter</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #090a0f;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            transition: background 0.3s ease;
+        }
+
+        /* Sallar-Style Contribution Chart Card */
+        .chart-card {
+            width: 100%;
+            height: 100%;
+            border-radius: 12px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        /* Top Header Control Area */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            background-color: #1f2937;
+        }
+
+        .user-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .display-name {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+
+        .meta-subtitle {
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            opacity: 0.6;
+            margin-top: 2px;
+        }
+
+        /* Right Panel Controls */
+        .controls-panel {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .theme-select {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: inherit;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .theme-select option {
+            background-color: #1e1e2f;
+            color: #ffffff;
+        }
+
+        .theme-select:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .refresh-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: inherit;
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .refresh-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .refresh-icon {
+            width: 11px;
+            height: 11px;
+            fill: currentColor;
+        }
+
+        .refresh-btn.loading .refresh-icon {
+            animation: rotate 1s infinite linear;
+        }
+
+        /* Calendar Grid Area styling */
+        .calendar-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        /* Strip GitHub's default layout properties to match Sallar style */
+        .js-yearly-contributions h2, 
+        .js-yearly-contributions a.show-on-focus {
+            display: none !important;
+        }
+
+        .graph-before-activity-overview {
+            border: none !important;
+            padding: 0 !important;
+            background: transparent !important;
+        }
+
+        .ContributionCalendar {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+        }
+
+        .ContributionCalendar-grid {
+            border-collapse: separate;
+            border-spacing: 3px;
+        }
+
+        .ContributionCalendar-day {
+            width: 10px !important;
+            height: 10px !important;
+            border-radius: 3px !important;
+            outline: none !important;
+            transition: transform 0.1s ease, filter 0.1s ease !important;
+        }
+
+        .ContributionCalendar-day:hover {
+            transform: scale(1.4);
+            filter: brightness(1.2);
+            z-index: 10;
+        }
+
+        /* Show and style label tags (months, days) */
+        .ContributionCalendar-label {
+            font-size: 9px !important;
+            font-family: 'JetBrains Mono', monospace !important;
+            font-weight: 500 !important;
+            fill: currentColor !important;
+            color: inherit !important;
+            opacity: 0.5;
+            padding: 0 4px;
+        }
+
+        /* Hide screen-reader only elements and native tooltip blocks */
+        .sr-only, tool-tip {
+            display: none !important;
+        }
+
+        /* Footer & Details */
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 12px;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stats-summary {
+            font-weight: 500;
+        }
+
+        .legend {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            opacity: 0.8;
+        }
+
+        .legend-box {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        /* Custom Tooltip */
+        .custom-tooltip {
+            position: fixed;
+            background: rgba(10, 10, 15, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(6px);
+            transition: opacity 0.1s ease, transform 0.1s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+
+        .custom-tooltip.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* ==========================================================
+           Sallar Themes Configurations
+           ========================================================== */
+
+        /* 1. Dracula Theme */
+        .theme-dracula {
+            background-color: #1e1e2f;
+            color: #f8f8f2;
+        }
+        .theme-dracula .ContributionCalendar-day[data-level="0"], .theme-dracula .legend-box[data-level="0"] { background-color: #2d2d44 !important; }
+        .theme-dracula .ContributionCalendar-day[data-level="1"], .theme-dracula .legend-box[data-level="1"] { background-color: #6272a4 !important; }
+        .theme-dracula .ContributionCalendar-day[data-level="2"], .theme-dracula .legend-box[data-level="2"] { background-color: #8be9fd !important; }
+        .theme-dracula .ContributionCalendar-day[data-level="3"], .theme-dracula .legend-box[data-level="3"] { background-color: #50fa7b !important; }
+        .theme-dracula .ContributionCalendar-day[data-level="4"], .theme-dracula .legend-box[data-level="4"] { background-color: #ff79c6 !important; }
+
+        /* 2. Standard Green Theme */
+        .theme-standard {
+            background-color: #0d1117;
+            color: #c9d1d9;
+        }
+        .theme-standard .ContributionCalendar-day[data-level="0"], .theme-standard .legend-box[data-level="0"] { background-color: #161b22 !important; }
+        .theme-standard .ContributionCalendar-day[data-level="1"], .theme-standard .legend-box[data-level="1"] { background-color: #0e4429 !important; }
+        .theme-standard .ContributionCalendar-day[data-level="2"], .theme-standard .legend-box[data-level="2"] { background-color: #006d32 !important; }
+        .theme-standard .ContributionCalendar-day[data-level="3"], .theme-standard .legend-box[data-level="3"] { background-color: #26a641 !important; }
+        .theme-standard .ContributionCalendar-day[data-level="4"], .theme-standard .legend-box[data-level="4"] { background-color: #39d353 !important; }
+
+        /* 3. Obsidian Theme (Gold/Bronze/Dark) */
+        .theme-obsidian {
+            background-color: #101010;
+            color: #e0e0e0;
+        }
+        .theme-obsidian .ContributionCalendar-day[data-level="0"], .theme-obsidian .legend-box[data-level="0"] { background-color: #1f1f1f !important; }
+        .theme-obsidian .ContributionCalendar-day[data-level="1"], .theme-obsidian .legend-box[data-level="1"] { background-color: #3e331b !important; }
+        .theme-obsidian .ContributionCalendar-day[data-level="2"], .theme-obsidian .legend-box[data-level="2"] { background-color: #79612b !important; }
+        .theme-obsidian .ContributionCalendar-day[data-level="3"], .theme-obsidian .legend-box[data-level="3"] { background-color: #b5903b !important; }
+        .theme-obsidian .ContributionCalendar-day[data-level="4"], .theme-obsidian .legend-box[data-level="4"] { background-color: #f1bf4a !important; }
+
+        /* 4. Halloween Theme (Orange/Yellow) */
+        .theme-halloween {
+            background-color: #0f0f15;
+            color: #f0f0f5;
+        }
+        .theme-halloween .ContributionCalendar-day[data-level="0"], .theme-halloween .legend-box[data-level="0"] { background-color: #1b1b22 !important; }
+        .theme-halloween .ContributionCalendar-day[data-level="1"], .theme-halloween .legend-box[data-level="1"] { background-color: #631c03 !important; }
+        .theme-halloween .ContributionCalendar-day[data-level="2"], .theme-halloween .legend-box[data-level="2"] { background-color: #bd5604 !important; }
+        .theme-halloween .ContributionCalendar-day[data-level="3"], .theme-halloween .legend-box[data-level="3"] { background-color: #fa7a18 !important; }
+        .theme-halloween .ContributionCalendar-day[data-level="4"], .theme-halloween .legend-box[data-level="4"] { background-color: #fddf68 !important; }
+
+        /* 5. Violet Theme */
+        .theme-violet {
+            background-color: #120c1f;
+            color: #e5def0;
+        }
+        .theme-violet .ContributionCalendar-day[data-level="0"], .theme-violet .legend-box[data-level="0"] { background-color: #211b2d !important; }
+        .theme-violet .ContributionCalendar-day[data-level="1"], .theme-violet .legend-box[data-level="1"] { background-color: #4c3070 !important; }
+        .theme-violet .ContributionCalendar-day[data-level="2"], .theme-violet .legend-box[data-level="2"] { background-color: #744da9 !important; }
+        .theme-violet .ContributionCalendar-day[data-level="3"], .theme-violet .legend-box[data-level="3"] { background-color: #9b6be3 !important; }
+        .theme-violet .ContributionCalendar-day[data-level="4"], .theme-violet .legend-box[data-level="4"] { background-color: #c5a3ff !important; }
+    </style>
+</head>
+<body class="theme-dracula">
+
+    <div class="chart-card" id="card">
+        <!-- Header -->
+        <div class="header">
+            <div class="user-profile">
+                <a href="#" id="profile-link" target="_blank" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 12px; transition: opacity 0.2s;">
+                    <img class="avatar" id="avatar" src="" alt="" style="display: none;">
+                    <div class="user-details">
+                        <span class="display-name" id="display-name">@username</span>
+                        <span class="meta-subtitle">GitHub Contributions Calendar ↗</span>
+                    </div>
+                </a>
+            </div>
+            
+            <div class="controls-panel">
+                <select class="theme-select" id="year-selector" onchange="changeYear(this.value)">
+                    <!-- Populated dynamically by JS -->
+                </select>
+                <select class="theme-select" id="theme-selector" onchange="changeTheme(this.value)">
+                    <option value="dracula">Dracula</option>
+                    <option value="standard">Classic Green</option>
+                    <option value="obsidian">Obsidian</option>
+                    <option value="halloween">Halloween</option>
+                    <option value="violet">Violet</option>
+                </select>
+                <button class="refresh-btn" id="refresh-btn" onclick="triggerRefresh()">
+                    <svg class="refresh-icon" viewBox="0 0 16 16" version="1.1" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M8 2.5a5.487 5.487 0 00-4.131 1.869l1.204 1.204A.25.25 0 014.896 6H1.25A.25.25 0 011 5.75V2.104a.25.25 0 01.427-.177l1.38 1.381A7.001 7.001 0 0114.95 7.16a.75.75 0 11-1.49.128A5.501 5.501 0 008 2.5zM1.705 8.005a.75.75 0 01.834.656 5.501 5.501 0 009.592 2.97l-1.204-1.204a.25.25 0 01.177-.427h3.646a.25.25 0 01.25.25v3.646a.25.25 0 01-.427.177l-1.38-1.38a7.001 7.001 0 01-11.972-4.008.75.75 0 01.688-.83z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Calendar Graph -->
+        <div class="calendar-container" id="calendar-container">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; opacity: 0.5;">
+                Loading grid data...
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <span class="stats-summary" id="stats-display">0 contributions in the last year</span>
+            <div class="legend">
+                <span>Less</span>
+                <div class="legend-box" data-level="0"></div>
+                <div class="legend-box" data-level="1"></div>
+                <div class="legend-box" data-level="2"></div>
+                <div class="legend-box" data-level="3"></div>
+                <div class="legend-box" data-level="4"></div>
+                <span>More</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Tooltip -->
+    <div class="custom-tooltip" id="tooltip"></div>
+
+    <script>
+        const API_URL = 'http://localhost:8090/api';
+        const tooltip = document.getElementById('tooltip');
+        let currentYear = new Date().getFullYear().toString();
+
+        // Dynamically populate year dropdown from current year down to 5 years back
+        function populateYearSelector() {
+            const selector = document.getElementById('year-selector');
+            const thisYear = new Date().getFullYear();
+            for (let y = thisYear; y >= thisYear - 4; y--) {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = y;
+                selector.appendChild(opt);
+            }
+            selector.value = thisYear.toString();
+        }
+
+        // Dynamic theme management
+        function changeTheme(themeName) {
+            document.body.className = `theme-${themeName}`;
+            localStorage.setItem('selected-theme', themeName);
+        }
+
+        // Apply saved theme on load
+        const savedTheme = localStorage.getItem('selected-theme') || 'dracula';
+        document.getElementById('theme-selector').value = savedTheme;
+        changeTheme(savedTheme);
+
+        // Year navigation callback
+        async function changeYear(year) {
+            currentYear = year;
+            await loadCalendarHTML();
+        }
+
+        function setStatus(loading) {
+            const btn = document.getElementById('refresh-btn');
+            if (loading) {
+                btn.classList.add('loading');
+            } else {
+                btn.classList.remove('loading');
+            }
+        }
+
+        async function init() {
+            try {
+                // Populate year dropdown dynamically
+                populateYearSelector();
+
+                // Get config
+                const configRes = await fetch(`${API_URL}/config`);
+                if (!configRes.ok) throw new Error("Server offline");
+                const config = await configRes.json();
+                
+                document.getElementById('display-name').textContent = `@${config.username}`;
+                document.getElementById('avatar').src = `https://github.com/${config.username}.png`;
+                document.getElementById('avatar').style.display = 'block';
+                document.getElementById('profile-link').href = config.profile_url;
+                
+                // currentYear is already set dynamically
+                document.getElementById('year-selector').value = currentYear;
+
+                await loadCalendarHTML();
+            } catch (err) {
+                console.error(err);
+                document.getElementById('stats-display').textContent = "Connection failed";
+            }
+        }
+
+        async function loadCalendarHTML() {
+            try {
+                const res = await fetch(`data/contributions_${currentYear}.html`);
+                if (!res.ok) throw new Error(`No contribution cache for ${currentYear}. Please click refresh.`);
+                const html = await res.text();
+                
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
+                
+                const table = tempDiv.querySelector('table.ContributionCalendar-grid');
+                const container = document.getElementById('calendar-container');
+                
+                if (table) {
+                    // Extract table.parentElement which preserves both the table AND sibling tool-tips!
+                    const parentDiv = table.parentElement;
+                    container.innerHTML = '';
+                    container.appendChild(parentDiv);
+                } else {
+                    container.innerHTML = html; // Fallback
+                }
+
+                // Extract total count
+                const headerTextEl = tempDiv.querySelector('#js-contribution-activity-description');
+                if (headerTextEl) {
+                    const cleanText = headerTextEl.textContent.replace(/\s+/g, ' ').trim();
+                    document.getElementById('stats-display').textContent = cleanText;
+                } else {
+                    document.getElementById('stats-display').textContent = `${currentYear} Contributions Calendar`;
+                }
+
+                setupTooltipListeners();
+            } catch (err) {
+                document.getElementById('calendar-container').innerHTML = 
+                    `<div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; opacity: 0.7; text-align: center; color: #ff5555; padding: 20px;">
+                        ${err.message}<br><span style="font-size:10px; opacity:0.6;">Click the refresh button to trigger Selenium fetch.</span>
+                     </div>`;
+                document.getElementById('stats-display').textContent = "No data loaded";
+            }
+        }
+
+        async function triggerRefresh() {
+            setStatus(true);
+            document.getElementById('stats-display').textContent = `Fetching contributions for ${currentYear}...`;
+            
+            try {
+                const res = await fetch(`${API_URL}/fetch?year=${currentYear}`);
+                if (!res.ok) throw new Error(`Failed to fetch contribution graph for ${currentYear}`);
+                await loadCalendarHTML();
+            } catch (err) {
+                alert(`Scraping Error: ${err.message}`);
+                document.getElementById('stats-display').textContent = "Fetch failed";
+            } finally {
+                setStatus(false);
+            }
+        }
+
+        function setupTooltipListeners() {
+            const calendar = document.getElementById('calendar-container');
+            
+            calendar.addEventListener('mouseover', (e) => {
+                const day = e.target.closest('.ContributionCalendar-day');
+                if (day && day.id) {
+                    const rawTooltip = calendar.querySelector(`tool-tip[for="${day.id}"]`);
+                    if (rawTooltip) {
+                        tooltip.textContent = rawTooltip.textContent.trim();
+                        tooltip.classList.add('visible');
+                    }
+                }
+            });
+
+            calendar.addEventListener('mousemove', (e) => {
+                if (tooltip.classList.contains('visible')) {
+                    tooltip.style.left = `${e.clientX + 12}px`;
+                    tooltip.style.top = `${e.clientY - 35}px`;
+                }
+            });
+
+            calendar.addEventListener('mouseout', (e) => {
+                const day = e.target.closest('.ContributionCalendar-day');
+                if (day) {
+                    tooltip.classList.remove('visible');
+                }
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

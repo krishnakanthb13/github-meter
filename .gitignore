@@ -1,0 +1,25 @@
+# Environments & Configs
+.env
+
+# Cache files (stored yearly contribution charts)
+data/*
+!data/.gitkeep
+
+# Python files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Operating System Files
+Thumbs.db
+Desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
