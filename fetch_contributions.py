@@ -10,7 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 def fetch_contributions(year=None):
     # Load configuration
-    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
     if os.path.exists(env_path):
         load_dotenv(env_path)
     else:
@@ -52,7 +52,7 @@ def fetch_contributions(year=None):
         html_content = element.get_attribute("outerHTML")
         
         # Ensure the data directory exists
-        data_dir = os.path.join(os.path.dirname(__file__), "data")
+        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
         os.makedirs(data_dir, exist_ok=True)
         
         output_file = os.path.join(data_dir, f"contributions_{year}.html")
