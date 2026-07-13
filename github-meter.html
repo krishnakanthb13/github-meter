@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GitHub Contribution Meter</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0iIzBkMTExNyIvPgogIDxyZWN0IHg9IjUiIHk9IjUiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIHJ4PSIyIiBmaWxsPSIjMjE2ZTM5Ii8+CiAgPHJlY3QgeD0iMTkiIHk9IjUiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIHJ4PSIyIiBmaWxsPSIjMzlkMzUzIi8+CiAgPHJlY3QgeD0iNSIgeT0iMTkiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIHJ4PSIyIiBmaWxsPSIjMGU0NDI5Ii8+CiAgPHJlY3QgeD0iMTkiIHk9IjE5IiB3aWR0aD0iOCIgaGVpZ2h0PSI4IiByeD0iMiIgZmlsbD0iIzI2YTY0MSIvPgo8L3N2Zz4=">
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
@@ -87,26 +89,51 @@
             gap: 8px;
         }
 
-        .theme-select {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: inherit;
-            padding: 4px 8px;
+        .cycler {
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 6px;
-            font-size: 11px;
-            font-weight: 500;
-            outline: none;
+            padding: 2px;
+            gap: 2px;
+        }
+
+        .cycle-btn {
+            background: transparent;
+            border: none;
+            color: inherit;
             cursor: pointer;
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            font-size: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.6;
             transition: all 0.2s ease;
+            outline: none;
         }
 
-        .theme-select option {
-            background-color: #1e1e2f;
-            color: #ffffff;
+        .cycle-btn:hover {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.08);
         }
 
-        .theme-select:hover {
-            background: rgba(255, 255, 255, 0.12);
+        .cycle-btn:focus {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .cycler-label {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 0 4px;
+            min-width: 68px;
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+            opacity: 0.85;
+            user-select: none;
         }
 
         .refresh-btn {
@@ -147,6 +174,7 @@
             width: 100%;
             overflow: hidden;
             margin: 8px 0;
+            position: relative;
         }
 
         /* Strip GitHub's default layout properties to match Sallar style */
@@ -259,6 +287,70 @@
             to { transform: rotate(360deg); }
         }
 
+        /* Zero state styling */
+        .zero-state-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(10, 10, 15, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 20px 24px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 85%;
+            z-index: 10;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            animation: zeroFadeIn 0.4s ease-out;
+        }
+
+        .zero-state-icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
+            animation: zeroFloat 3s ease-in-out infinite;
+        }
+
+        .zero-state-title {
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            letter-spacing: -0.2px;
+            background: linear-gradient(135deg, #ffffff 0%, #a0a0a5 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .zero-state-desc {
+            font-size: 11px;
+            opacity: 0.65;
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.4;
+        }
+
+        .calendar-container.is-zero .js-yearly-contributions {
+            opacity: 0.15;
+            filter: blur(1.5px);
+            transition: all 0.3s ease;
+        }
+
+        @keyframes zeroFadeIn {
+            from { opacity: 0; transform: translate(-50%, -45%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+
+        @keyframes zeroFloat {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(0, -5px); }
+        }
+
         /* ==========================================================
            Sallar Themes Configurations
            ========================================================== */
@@ -317,6 +409,50 @@
         .theme-violet .ContributionCalendar-day[data-level="2"], .theme-violet .legend-box[data-level="2"] { background-color: #744da9 !important; }
         .theme-violet .ContributionCalendar-day[data-level="3"], .theme-violet .legend-box[data-level="3"] { background-color: #9b6be3 !important; }
         .theme-violet .ContributionCalendar-day[data-level="4"], .theme-violet .legend-box[data-level="4"] { background-color: #c5a3ff !important; }
+
+        /* 6. Cyberpunk Theme */
+        .theme-cyberpunk {
+            background-color: #070913;
+            color: #00ffcc;
+        }
+        .theme-cyberpunk .ContributionCalendar-day[data-level="0"], .theme-cyberpunk .legend-box[data-level="0"] { background-color: #101428 !important; }
+        .theme-cyberpunk .ContributionCalendar-day[data-level="1"], .theme-cyberpunk .legend-box[data-level="1"] { background-color: #390099 !important; }
+        .theme-cyberpunk .ContributionCalendar-day[data-level="2"], .theme-cyberpunk .legend-box[data-level="2"] { background-color: #9e0059 !important; }
+        .theme-cyberpunk .ContributionCalendar-day[data-level="3"], .theme-cyberpunk .legend-box[data-level="3"] { background-color: #ff0054 !important; }
+        .theme-cyberpunk .ContributionCalendar-day[data-level="4"], .theme-cyberpunk .legend-box[data-level="4"] { background-color: #ffbd00 !important; }
+
+        /* 7. Arctic Frost Theme */
+        .theme-arctic {
+            background-color: #0b111e;
+            color: #d1f4ff;
+        }
+        .theme-arctic .ContributionCalendar-day[data-level="0"], .theme-arctic .legend-box[data-level="0"] { background-color: #17223b !important; }
+        .theme-arctic .ContributionCalendar-day[data-level="1"], .theme-arctic .legend-box[data-level="1"] { background-color: #204051 !important; }
+        .theme-arctic .ContributionCalendar-day[data-level="2"], .theme-arctic .legend-box[data-level="2"] { background-color: #3b6978 !important; }
+        .theme-arctic .ContributionCalendar-day[data-level="3"], .theme-arctic .legend-box[data-level="3"] { background-color: #84a9ac !important; }
+        .theme-arctic .ContributionCalendar-day[data-level="4"], .theme-arctic .legend-box[data-level="4"] { background-color: #cae8d5 !important; }
+
+        /* 8. Sakura Theme */
+        .theme-sakura {
+            background-color: #1a0f12;
+            color: #ffb7c5;
+        }
+        .theme-sakura .ContributionCalendar-day[data-level="0"], .theme-sakura .legend-box[data-level="0"] { background-color: #2a1b1f !important; }
+        .theme-sakura .ContributionCalendar-day[data-level="1"], .theme-sakura .legend-box[data-level="1"] { background-color: #643843 !important; }
+        .theme-sakura .ContributionCalendar-day[data-level="2"], .theme-sakura .legend-box[data-level="2"] { background-color: #994d5f !important; }
+        .theme-sakura .ContributionCalendar-day[data-level="3"], .theme-sakura .legend-box[data-level="3"] { background-color: #c88191 !important; }
+        .theme-sakura .ContributionCalendar-day[data-level="4"], .theme-sakura .legend-box[data-level="4"] { background-color: #ffb7c5 !important; }
+
+        /* 9. Retro Paper (Light) Theme */
+        .theme-paper {
+            background-color: #f7f4eb;
+            color: #2b2b2b;
+        }
+        .theme-paper .ContributionCalendar-day[data-level="0"], .theme-paper .legend-box[data-level="0"] { background-color: #e4dec9 !important; }
+        .theme-paper .ContributionCalendar-day[data-level="1"], .theme-paper .legend-box[data-level="1"] { background-color: #a8a290 !important; }
+        .theme-paper .ContributionCalendar-day[data-level="2"], .theme-paper .legend-box[data-level="2"] { background-color: #797364 !important; }
+        .theme-paper .ContributionCalendar-day[data-level="3"], .theme-paper .legend-box[data-level="3"] { background-color: #4f4a3e !important; }
+        .theme-paper .ContributionCalendar-day[data-level="4"], .theme-paper .legend-box[data-level="4"] { background-color: #1e1b15 !important; }
     </style>
 </head>
 <body class="theme-dracula">
@@ -335,17 +471,19 @@
             </div>
             
             <div class="controls-panel">
-                <select class="theme-select" id="year-selector" onchange="changeYear(this.value)">
-                    <!-- Populated dynamically by JS -->
-                </select>
-                <select class="theme-select" id="theme-selector" onchange="changeTheme(this.value)">
-                    <option value="dracula">Dracula</option>
-                    <option value="standard">Classic Green</option>
-                    <option value="obsidian">Obsidian</option>
-                    <option value="halloween">Halloween</option>
-                    <option value="violet">Violet</option>
-                </select>
-                <button class="refresh-btn" id="refresh-btn" onclick="triggerRefresh()">
+                <!-- Year Cycler -->
+                <div class="cycler">
+                    <button class="cycle-btn" onclick="cycleYear(-1)" aria-label="Previous year">◀</button>
+                    <span class="cycler-label" id="year-label">----</span>
+                    <button class="cycle-btn" onclick="cycleYear(1)" aria-label="Next year">▶</button>
+                </div>
+                <!-- Theme Cycler -->
+                <div class="cycler">
+                    <button class="cycle-btn" onclick="cycleTheme(-1)" aria-label="Previous theme">◀</button>
+                    <span class="cycler-label" id="theme-label">Dracula</span>
+                    <button class="cycle-btn" onclick="cycleTheme(1)" aria-label="Next theme">▶</button>
+                </div>
+                <button class="refresh-btn" id="refresh-btn" onclick="triggerRefresh()" aria-label="Refresh contributions data">
                     <svg class="refresh-icon" viewBox="0 0 16 16" version="1.1" aria-hidden="true">
                         <path fill-rule="evenodd" d="M8 2.5a5.487 5.487 0 00-4.131 1.869l1.204 1.204A.25.25 0 014.896 6H1.25A.25.25 0 011 5.75V2.104a.25.25 0 01.427-.177l1.38 1.381A7.001 7.001 0 0114.95 7.16a.75.75 0 11-1.49.128A5.501 5.501 0 008 2.5zM1.705 8.005a.75.75 0 01.834.656 5.501 5.501 0 009.592 2.97l-1.204-1.204a.25.25 0 01.177-.427h3.646a.25.25 0 01.25.25v3.646a.25.25 0 01-.427.177l-1.38-1.38a7.001 7.001 0 01-11.972-4.008.75.75 0 01.688-.83z"></path>
                     </svg>
@@ -388,11 +526,12 @@
         let currentYear = new Date().getFullYear().toString();
         let tooltipInitialized = false;
         let yearDebounce = null;
+        const autoFetchedYears = new Set();
 
         // Cache DOM references
         const els = {
-            yearSelector: document.getElementById('year-selector'),
-            themeSelector: document.getElementById('theme-selector'),
+            yearLabel: document.getElementById('year-label'),
+            themeLabel: document.getElementById('theme-label'),
             displayName: document.getElementById('display-name'),
             avatar: document.getElementById('avatar'),
             profileLink: document.getElementById('profile-link'),
@@ -402,17 +541,45 @@
             refreshBtn: document.getElementById('refresh-btn'),
         };
 
-        // Populate year dropdown: current year back to 2015
-        function populateYearSelector() {
+        const THEMES = [
+            { id: "dracula", name: "Dracula" },
+            { id: "standard", name: "Classic" },
+            { id: "obsidian", name: "Obsidian" },
+            { id: "halloween", name: "Halloween" },
+            { id: "violet", name: "Violet" },
+            { id: "cyberpunk", name: "Cyberpunk" },
+            { id: "arctic", name: "Arctic" },
+            { id: "sakura", name: "Sakura" },
+            { id: "paper", name: "Paper" }
+        ];
+
+        let years = [];
+        let themeIndex = 0;
+        let yearIndex = 0;
+
+        // Populate years: 2015 up to current year (sorted ascending)
+        function populateYears() {
             const thisYear = new Date().getFullYear();
-            const startYear = Math.max(thisYear - 9, 2015);
-            for (let y = thisYear; y >= startYear; y--) {
-                const opt = document.createElement('option');
-                opt.value = y;
-                opt.textContent = y;
-                els.yearSelector.appendChild(opt);
+            const joinYear = accountCreatedAt ? new Date(accountCreatedAt).getFullYear() : 2015;
+            const startYear = Math.max(thisYear - 9, joinYear);
+            
+            years = [];
+            for (let y = startYear; y <= thisYear; y++) {
+                years.push(y.toString());
             }
-            els.yearSelector.value = thisYear.toString();
+
+            yearIndex = years.indexOf(currentYear);
+            if (yearIndex === -1) {
+                yearIndex = years.length - 1;
+                currentYear = years[yearIndex];
+            }
+            updateYearLabel();
+        }
+
+        function updateYearLabel() {
+            if (els.yearLabel) {
+                els.yearLabel.textContent = currentYear;
+            }
         }
 
         // Theme management
@@ -428,9 +595,31 @@
             return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dracula' : 'standard';
         }
 
-        const savedTheme = localStorage.getItem('selected-theme') || getSystemTheme();
-        els.themeSelector.value = savedTheme;
-        changeTheme(savedTheme);
+        // Initialize theme index & view
+        function initTheme() {
+            let savedTheme = getSystemTheme();
+            try {
+                const localTheme = localStorage.getItem('selected-theme');
+                if (localTheme) savedTheme = localTheme;
+            } catch (e) {
+                console.warn("localStorage access blocked:", e);
+            }
+            themeIndex = THEMES.findIndex(t => t.id === savedTheme);
+            if (themeIndex === -1) themeIndex = 0;
+            if (els.themeLabel) {
+                els.themeLabel.textContent = THEMES[themeIndex].name;
+            }
+            changeTheme(THEMES[themeIndex].id);
+        }
+
+        function cycleTheme(direction) {
+            themeIndex = (themeIndex + direction + THEMES.length) % THEMES.length;
+            const theme = THEMES[themeIndex];
+            if (els.themeLabel) {
+                els.themeLabel.textContent = theme.name;
+            }
+            changeTheme(theme.id);
+        }
 
         async function changeYear(year) {
             clearTimeout(yearDebounce);
@@ -439,6 +628,14 @@
                 try { localStorage.setItem('selected-year', year); } catch {}
                 await loadCalendarHTML();
             }, DEBOUNCE_MS);
+        }
+
+        function cycleYear(direction) {
+            if (years.length === 0) return;
+            yearIndex = (yearIndex + direction + years.length) % years.length;
+            currentYear = years[yearIndex];
+            updateYearLabel();
+            changeYear(currentYear);
         }
 
         function setStatus(loading) {
@@ -459,6 +656,7 @@
 
         // Format join date nicely
         const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        let accountCreatedAt = null;
 
         function formatJoinDate(isoDate) {
             if (!isoDate) return null;
@@ -470,11 +668,11 @@
             if (!isoDate) return null;
             const joined = new Date(isoDate);
             const now = new Date();
-            let years = now.getFullYear() - joined.getFullYear();
+            let yearsVal = now.getFullYear() - joined.getFullYear();
             if (now.getMonth() < joined.getMonth() || (now.getMonth() === joined.getMonth() && now.getDate() < joined.getDate())) {
-                years--;
+                yearsVal--;
             }
-            return years;
+            return yearsVal;
         }
 
         // Load account info from GitHub API
@@ -484,21 +682,23 @@
                 if (!res.ok) return;
                 const info = await res.json();
                 if (info.created_at) {
+                    accountCreatedAt = info.created_at;
                     const joined = formatJoinDate(info.created_at);
                     const yrs = yearsActive(info.created_at);
                     els.metaSubtitle.textContent = `Joined ${joined} \u00b7 ${yrs}y active \u00b7 GitHub Contributions \u2197`;
+                    populateYears();
                 }
             } catch {}
         }
 
         async function initConfig() {
-            populateYearSelector();
-
             try {
                 const savedYear = localStorage.getItem('selected-year');
                 if (savedYear) currentYear = savedYear;
             } catch {}
-            els.yearSelector.value = currentYear;
+            
+            populateYears();
+            initTheme();
 
             const configRes = await fetchWithTimeout(`${API_URL}/config`, TIMEOUT_CONFIG);
             if (!configRes.ok) throw new Error("Server offline");
@@ -543,7 +743,17 @@
         async function loadCalendarHTML() {
             try {
                 const res = await fetchWithTimeout(`data/contributions_${currentYear}.html`, TIMEOUT_HTML);
-                if (!res.ok) throw new Error(`No contribution cache for ${currentYear}. Please click refresh.`);
+                if (!res.ok) {
+                    // No cache exists - auto-fetch once per year per page load
+                    if (autoFetchedYears.has(currentYear)) {
+                        showErrorState(`No data for ${currentYear}. Click refresh to fetch.`);
+                        return;
+                    }
+                    autoFetchedYears.add(currentYear);
+                    els.statsDisplay.textContent = `No cache for ${currentYear}. Fetching...`;
+                    await triggerRefresh();
+                    return;
+                }
                 const html = await res.text();
 
                 const tempDiv = document.createElement('div');
@@ -559,6 +769,32 @@
 
                 const parentDiv = table.parentElement;
                 els.calendarContainer.replaceChildren(parentDiv);
+
+                const nonZeroDays = table.querySelectorAll('.ContributionCalendar-day[data-level]:not([data-level="0"])');
+                if (nonZeroDays.length === 0) {
+                    els.calendarContainer.classList.add('is-zero');
+                    const ZERO_STATES = [
+                        { icon: "💤", title: "Hibernation Mode", desc: "No commits detected. The developer is recharging their biological batteries." },
+                        { icon: "🌌", title: "Radio Silence", desc: "0 contributions. A year of absolute peace, offline adventures, or deep contemplation." },
+                        { icon: "🌱", title: "Fallow Ground", desc: "No code here. The soil is resting to ensure a legendary harvest next season." },
+                        { icon: "🍿", title: "Spectator Mode", desc: "0 commits. Sit back, relax, and let the rest of the world push to main." },
+                        { icon: "🌵", title: "Offline Oasis", desc: "Living AFK (Away From Keyboard). The desert is quiet and beautiful." }
+                    ];
+                    // Consistent pick per year using the last digit of the year
+                    const stateIndex = parseInt(currentYear.slice(-1), 10) % ZERO_STATES.length;
+                    const state = ZERO_STATES[stateIndex];
+
+                    const overlay = document.createElement('div');
+                    overlay.className = 'zero-state-overlay';
+                    overlay.innerHTML = `
+                        <div class="zero-state-icon">${state.icon}</div>
+                        <div class="zero-state-title">${state.title}</div>
+                        <div class="zero-state-desc">${state.desc}</div>
+                    `;
+                    els.calendarContainer.appendChild(overlay);
+                } else {
+                    els.calendarContainer.classList.remove('is-zero');
+                }
 
                 const headerTextEl = tempDiv.querySelector('#js-contribution-activity-description');
                 if (headerTextEl) {

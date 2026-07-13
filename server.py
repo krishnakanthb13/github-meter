@@ -8,7 +8,7 @@ import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from urllib.request import urlopen, Request
-from urllib.error import URLError
+from urllib.error import URLError, HTTPError
 from dotenv import load_dotenv
 
 # Ensure we can import fetch_contributions
@@ -32,48 +32,78 @@ else:
 _profile_url = os.getenv("GITHUB_PROFILE", "https://github.com/krishnakanthb13")
 _username = _profile_url.rstrip('/').split('/')[-1] if '/' in _profile_url else _profile_url
 
-# Rate limiting: only one Selenium fetch at a time
+# Rate limiting: serialize contribution fetches
 _fetch_lock = threading.Lock()
 
 # Account info cache
-_account_cache = {"data": None, "ts": 0}
+_account_cache = {
+    "data": None,
+    "ts": 0,
+    "etag": None,
+    "last_modified": None,
+    "last_fail_ts": 0
+}
 _account_lock = threading.Lock()
 _ACCOUNT_CACHE_TTL = 3600  # 1 hour
+_RETRY_COOLDOWN = 300      # 5 minutes
 
 
 def _fetch_account_info():
     now = time.time()
+    
+    # If cache is fresh, return it
     if _account_cache["data"] and (now - _account_cache["ts"]) < _ACCOUNT_CACHE_TTL:
+        return _account_cache["data"]
+
+    # Cooldown to serve stale cache during persistent outages
+    if _account_cache["data"] and (now - _account_cache["last_fail_ts"]) < _RETRY_COOLDOWN:
         return _account_cache["data"]
 
     with _account_lock:
         # Double-check after acquiring lock
         if _account_cache["data"] and (now - _account_cache["ts"]) < _ACCOUNT_CACHE_TTL:
             return _account_cache["data"]
+        if _account_cache["data"] and (now - _account_cache["last_fail_ts"]) < _RETRY_COOLDOWN:
+            return _account_cache["data"]
 
         try:
+            headers = {
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "github-meter"
+            }
+            if _account_cache["etag"]:
+                headers["If-None-Match"] = _account_cache["etag"]
+            if _account_cache["last_modified"]:
+                headers["If-Modified-Since"] = _account_cache["last_modified"]
+
             req = Request(
                 f"https://api.github.com/users/{_username}",
-                headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "github-meter"}
+                headers=headers
             )
-            with urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read().decode())
-                info = {
-                    "login": data.get("login"),
-                    "name": data.get("name"),
-                    "created_at": data.get("created_at"),
-                    "public_repos": data.get("public_repos"),
-                    "followers": data.get("followers"),
-                    "following": data.get("following"),
-                    "bio": data.get("bio"),
-                    "avatar_url": data.get("avatar_url"),
-                }
-                _account_cache["data"] = info
-                _account_cache["ts"] = time.time()
-                return info
+            try:
+                with urlopen(req, timeout=10) as resp:
+                    etag = resp.getheader("ETag")
+                    last_mod = resp.getheader("Last-Modified")
+                    
+                    data = json.loads(resp.read().decode())
+                    info = {
+                        "created_at": data.get("created_at"),
+                    }
+                    _account_cache["data"] = info
+                    _account_cache["ts"] = now
+                    _account_cache["etag"] = etag
+                    _account_cache["last_modified"] = last_mod
+                    return info
+            except HTTPError as e:
+                # Catch HTTP 304 Not Modified
+                if e.code == 304:
+                    log.info("GitHub account info not modified (304). Renewing cache lifetime.")
+                    _account_cache["ts"] = now
+                    return _account_cache["data"]
+                raise e
         except Exception as e:
             log.warning("Failed to fetch account info: %s", e)
-            # Return stale cache if available, otherwise None
+            _account_cache["last_fail_ts"] = now
             return _account_cache["data"]
 
 
@@ -143,7 +173,7 @@ class GithubMeterHandler(SimpleHTTPRequestHandler):
                 return
 
             try:
-                log.info("Triggering headless browser fetch for year: %s", year)
+                log.info("Fetching contribution HTML for year: %s", year)
                 fetch_contributions(year)
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')

@@ -5,13 +5,9 @@ import time
 import re
 import logging
 import datetime
+from urllib.request import urlopen, Request
+from urllib.error import URLError, HTTPError
 from dotenv import load_dotenv
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(asctime)s %(message)s', datefmt='%H:%M:%S')
 log = logging.getLogger(__name__)
@@ -21,6 +17,7 @@ BACKOFF_BASE = 1  # seconds; 1, 2, 4
 KEEP_FILES = 6
 
 PROFILE_RE = re.compile(r'^https?://github\.com/[a-zA-Z0-9\-]+/?$')
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 
 def _cleanup_old_files(data_dir, keep=KEEP_FILES):
@@ -48,53 +45,32 @@ def fetch_contributions(year=None):
     if not year:
         year = str(datetime.datetime.now().year)
 
-    profile_url = f"{profile_base_url}?tab=overview&from={year}-01-01&to={year}-12-31"
-    log.info("Target URL: %s", profile_url)
+    # Extract username from profile URL
+    username = profile_base_url.rstrip('/').split('/')[-1]
 
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1200,900")
-    options.add_argument("--blink-settings=imagesEnabled=false")
-    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+    # Use GitHub's direct contributions endpoint (no Selenium needed)
+    contributions_url = f"https://github.com/users/{username}/contributions?tab=overview&from={year}-01-01&to={year}-12-31"
+    log.info("Target URL: %s", contributions_url)
 
-    prefs = {"profile.managed_default_content_settings.images": 2}
-    options.add_experimental_option("prefs", prefs)
+    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    os.makedirs(data_dir, exist_ok=True)
 
-    # Try to use webdriver-manager for automatic ChromeDriver management
-    service = None
-    try:
-        from webdriver_manager.chrome import ChromeDriverManager
-        service = Service(ChromeDriverManager().install())
-    except Exception:
-        log.info("webdriver-manager unavailable; using system ChromeDriver")
-
-    driver = None
     last_error = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            driver = webdriver.Chrome(service=service, options=options) if service else webdriver.Chrome(options=options)
-
-            log.info("Attempt %d/%d: launching browser...", attempt, MAX_RETRIES)
-            driver.get(profile_url)
-            log.info("Waiting for contribution grid...")
-            wait = WebDriverWait(driver, 15)
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".ContributionCalendar-day")))
-
-            element = driver.find_element(By.CSS_SELECTOR, ".js-yearly-contributions")
-            html_content = element.get_attribute("outerHTML")
+            log.info("Attempt %d/%d: fetching contributions...", attempt, MAX_RETRIES)
+            req = Request(contributions_url, headers={"User-Agent": USER_AGENT})
+            with urlopen(req, timeout=30) as resp:
+                html_content = resp.read().decode("utf-8")
 
             if not html_content or len(html_content.strip()) < 50:
-                raise ValueError("Scraped content appears empty or incomplete")
+                raise ValueError("Response appears empty or incomplete")
 
-            # Verify day cells exist in the scraped HTML
-            if '.ContributionCalendar-day' not in html_content:
-                raise ValueError("No contribution day cells found in scraped content")
+            if "ContributionCalendar-day" not in html_content:
+                raise ValueError("No contribution day cells found in response")
 
-            data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-            os.makedirs(data_dir, exist_ok=True)
+            if 'data-date="' not in html_content:
+                raise ValueError("No data-date attributes found in contribution cells")
 
             output_file = os.path.join(data_dir, f"contributions_{year}.html")
             with open(output_file, "w", encoding="utf-8") as f:
@@ -104,6 +80,20 @@ def fetch_contributions(year=None):
             _cleanup_old_files(data_dir)
             return
 
+        except HTTPError as e:
+            last_error = e
+            if e.code == 404:
+                log.error("GitHub profile not found (404). Please verify your GITHUB_PROFILE in .env.")
+                raise RuntimeError(f"GitHub profile not found (404) for username '{username}'. Check your .env file.") from e
+            elif e.code in (403, 429):
+                log.error("Rate limited or blocked by GitHub (status: %d).", e.code)
+            else:
+                log.error("HTTP error: %d - %s", e.code, e.reason)
+
+            if attempt < MAX_RETRIES:
+                backoff = BACKOFF_BASE * (2 ** (attempt - 1))
+                log.info("Retrying in %ds...", backoff)
+                time.sleep(backoff)
         except Exception as e:
             last_error = e
             log.warning("Attempt %d failed: %s", attempt, e)
@@ -111,10 +101,6 @@ def fetch_contributions(year=None):
                 backoff = BACKOFF_BASE * (2 ** (attempt - 1))
                 log.info("Retrying in %ds...", backoff)
                 time.sleep(backoff)
-        finally:
-            if driver:
-                driver.quit()
-                driver = None
 
     raise RuntimeError(f"Failed after {MAX_RETRIES} attempts. Last error: {last_error}")
 

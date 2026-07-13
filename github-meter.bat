@@ -19,10 +19,10 @@ if %errorlevel% neq 0 (
 
 :: 2. Check Python dependencies
 echo [SYSTEM] Checking Python dependencies...
-python -c "import selenium, dotenv" 2>nul
+python -c "import dotenv" 2>nul
 if %errorlevel% neq 0 (
     echo [SYSTEM] Installing required packages...
-    python -m pip install selenium python-dotenv webdriver-manager
+    python -m pip install python-dotenv
 )
 
 :: 3. Check for .env file
@@ -38,16 +38,22 @@ if not exist "%~dp0.env" (
     )
 )
 
-:: 4. Start Background Python API & Web Server
-echo [SYSTEM] Starting API server on port 8090...
-start /min "GitHub Meter Server" python "%~dp0server.py"
+:: 4. Kill any existing server on port 8090
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8090 2^>nul') do (
+    taskkill /PID %%a /F >nul 2>nul
+)
 
-:: 5. Wait until server is ready
+:: 5. Start Background Python API & Web Server with logging
+echo [SYSTEM] Starting API server on port 8090...
+start /b "" python "%~dp0server.py" > "%TEMP%\github-meter-server.log" 2>&1
+
+
+:: 6. Wait until server is ready using curl (available on all Windows 10+)
 echo [SYSTEM] Waiting for server...
 set "READY=0"
-for /l %%i in (1,1,20) do (
+for /l %%i in (1,1,30) do (
     if "!READY!"=="0" (
-        powershell -Command "$r = try { (Invoke-WebRequest -Uri 'http://localhost:8090/api/config' -UseBasicParsing -TimeoutSec 1).StatusCode } catch { 0 }; if ($r -eq 200) { exit 0 } else { exit 1 }" 2>nul
+        curl.exe -s -o nul -w %%{http_code} http://localhost:8090/api/config 2>nul | findstr 200 >nul 2>nul
         if !errorlevel! equ 0 (
             echo [SYSTEM] Server is ready.
             set "READY=1"
@@ -57,17 +63,19 @@ for /l %%i in (1,1,20) do (
     )
 )
 if "!READY!"=="0" (
-    echo [ERROR] Server failed to start within 20 seconds.
+    echo [ERROR] Server failed to start within 30 seconds.
+    echo [ERROR] Check server log: %TEMP%\github-meter-server.log
+    type "%TEMP%\github-meter-server.log" 2>nul
     pause
     exit /b 1
 )
 
-:: 6. Configure window dimensions & screen placement
+:: 7. Configure window dimensions & screen placement
 set WIDTH=930
 set HEIGHT=310
 set MARGIN=40
 
-:: 7. Detect screen resolution via PowerShell
+:: 8. Detect screen resolution via PowerShell
 echo [SYSTEM] Optimizing window placement...
 for /f "delims=" %%a in ('powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width"') do set "SCR_W=%%a"
 for /f "delims=" %%a in ('powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height"') do set "SCR_H=%%a"
@@ -80,32 +88,41 @@ if "%SCR_H%"=="" set "SCR_H=1080"
 set /a POS_X=%SCR_W% - %WIDTH% - %MARGIN%
 set /a POS_Y=%SCR_H% - %HEIGHT% - %MARGIN% - 40
 
-:: 8. Set App URL
+:: 9. Set App URL
 set "APP_URL=http://localhost:8090/github-meter.html"
 
-:: 9. Launch Arguments
+:: 10. Launch Arguments
 set "ARGS=--app="%APP_URL%" --window-size=%WIDTH%,%HEIGHT% --window-position=%POS_X%,%POS_Y% --user-data-dir="%TEMP%\GithubMeterProfile" --disable-extensions --no-first-run"
 
-:: 10. Launch the Browser (Chrome preferred, Edge fallback)
+:: 11. Launch the Browser (Chrome preferred, Edge fallback)
 echo [SYSTEM] Launching widget window...
+echo [SYSTEM] Close the widget window or press Ctrl+C in this console to exit.
 
 if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
-    start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" %ARGS%
-    exit /b
+    start /wait "" "C:\Program Files\Google\Chrome\Application\chrome.exe" %ARGS%
+    goto cleanup
 )
 if exist "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" (
-    start "" "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" %ARGS%
-    exit /b
+    start /wait "" "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" %ARGS%
+    goto cleanup
 )
 if exist "C:\Program Files\Microsoft\Edge\Application\msedge.exe" (
-    start "" "C:\Program Files\Microsoft\Edge\Application\msedge.exe" %ARGS%
-    exit /b
+    start /wait "" "C:\Program Files\Microsoft\Edge\Application\msedge.exe" %ARGS%
+    goto cleanup
 )
 if exist "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" (
-    start "" "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" %ARGS%
-    exit /b
+    start /wait "" "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" %ARGS%
+    goto cleanup
 )
 
 :: Final Fallback to default browser
 start "" "%APP_URL%"
+timeout /t 3 /nobreak >nul
+
+:cleanup
+echo [SYSTEM] Shutting down background server...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8090 2^>nul') do (
+    taskkill /PID %%a /F >nul 2>nul
+)
 exit /b
+

@@ -23,10 +23,10 @@ fi
 
 # 2. Check Python dependencies
 echo "[SYSTEM] Checking Python dependencies..."
-$PYTHON_CMD -c "import selenium, dotenv" 2>/dev/null
+$PYTHON_CMD -c "import dotenv" 2>/dev/null
 if [ $? -ne 0 ]; then
     echo "[SYSTEM] Installing required packages..."
-    $PYTHON_CMD -m pip install selenium python-dotenv webdriver-manager
+    $PYTHON_CMD -m pip install python-dotenv
 fi
 
 # 3. Check for .env file
@@ -41,9 +41,16 @@ if [ ! -f "$APP_DIR/.env" ]; then
     fi
 fi
 
-# 4. Start Background Server
+# 4. Kill any existing server on port 8090
+if command -v lsof &> /dev/null; then
+    lsof -ti :8090 | xargs kill -9 2>/dev/null
+elif command -v fuser &> /dev/null; then
+    fuser -k 8090/tcp 2>/dev/null
+fi
+
+# 5. Start Background Server with logging
 echo "[SYSTEM] Starting API server on port 8090..."
-$PYTHON_CMD "$APP_DIR/server.py" > /dev/null 2>&1 &
+$PYTHON_CMD "$APP_DIR/server.py" > /tmp/github-meter-server.log 2>&1 &
 SERVER_PID=$!
 
 # Trap signals to clean up the background server on exit
@@ -53,15 +60,16 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# 5. Wait until server is actually ready (poll instead of fixed sleep)
+# 6. Wait until server is actually ready (poll instead of fixed sleep)
 echo "[SYSTEM] Waiting for server..."
-for i in $(seq 1 20); do
+for i in $(seq 1 30); do
     if curl -s -o /dev/null http://localhost:8090/api/config 2>/dev/null; then
         echo "[SYSTEM] Server is ready."
         break
     fi
     if ! ps -p $SERVER_PID > /dev/null 2>&1; then
-        echo "[ERROR] Server failed to start. Check server.py errors."
+        echo "[ERROR] Server failed to start. Check log: /tmp/github-meter-server.log"
+        cat /tmp/github-meter-server.log 2>/dev/null
         exit 1
     fi
     sleep 0.5
@@ -83,8 +91,7 @@ if [ "$(uname)" == "Darwin" ]; then
             --window-size="$WIDTH","$HEIGHT" \
             --user-data-dir="/tmp/GithubMeterProfile" \
             --disable-extensions \
-            --no-first-run &
-        wait
+            --no-first-run
         exit 0
     fi
 fi
@@ -95,32 +102,28 @@ if command -v google-chrome &> /dev/null; then
         --window-size="$WIDTH","$HEIGHT" \
         --user-data-dir="/tmp/GithubMeterProfile" \
         --disable-extensions \
-        --no-first-run &
-    wait
+        --no-first-run
     exit 0
 elif command -v chromium-browser &> /dev/null; then
     chromium-browser --app="$APP_URL" \
         --window-size="$WIDTH","$HEIGHT" \
         --user-data-dir="/tmp/GithubMeterProfile" \
         --disable-extensions \
-        --no-first-run &
-    wait
+        --no-first-run
     exit 0
 elif command -v chromium &> /dev/null; then
     chromium --app="$APP_URL" \
         --window-size="$WIDTH","$HEIGHT" \
         --user-data-dir="/tmp/GithubMeterProfile" \
         --disable-extensions \
-        --no-first-run &
-    wait
+        --no-first-run
     exit 0
 elif command -v microsoft-edge &> /dev/null; then
     microsoft-edge --app="$APP_URL" \
         --window-size="$WIDTH","$HEIGHT" \
         --user-data-dir="/tmp/GithubMeterProfile" \
         --disable-extensions \
-        --no-first-run &
-    wait
+        --no-first-run
     exit 0
 fi
 
