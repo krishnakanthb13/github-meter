@@ -12,7 +12,7 @@ echo [SYSTEM] Running pre-flight checks...
 where python >nul 2>nul
 if %errorlevel% neq 0 (
     echo [ERROR] Python was not found in your PATH.
-    echo Please install Python 3.12+ and ensure "Add Python to PATH" is checked.
+    echo Please install Python 3.8+ and ensure "Add Python to PATH" is checked.
     pause
     exit /b 1
 )

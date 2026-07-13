@@ -12,7 +12,7 @@ echo "[SYSTEM] Running pre-flight checks..."
 if ! command -v python3 &> /dev/null; then
     if ! command -v python &> /dev/null; then
         echo "[ERROR] Python was not found in your PATH."
-        echo "Please install Python 3.12+ and try again."
+        echo "Please install Python 3.8+ and try again."
         exit 1
     else
         PYTHON_CMD="python"
