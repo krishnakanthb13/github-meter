@@ -21,7 +21,15 @@ else
     PYTHON_CMD="python3"
 fi
 
-# 2. Check for .env file
+# 2. Check Python dependencies
+echo "[SYSTEM] Checking Python dependencies..."
+$PYTHON_CMD -c "import selenium, dotenv" 2>/dev/null
+if [ $? -ne 0 ]; then
+    echo "[SYSTEM] Installing required packages..."
+    $PYTHON_CMD -m pip install selenium python-dotenv webdriver-manager
+fi
+
+# 3. Check for .env file
 if [ ! -f "$APP_DIR/.env" ]; then
     if [ -f "$APP_DIR/.env.example" ]; then
         echo "[SYSTEM] Creating .env from .env.example..."
@@ -33,7 +41,7 @@ if [ ! -f "$APP_DIR/.env" ]; then
     fi
 fi
 
-# 3. Start Background Server
+# 4. Start Background Server
 echo "[SYSTEM] Starting API server on port 8090..."
 $PYTHON_CMD "$APP_DIR/server.py" > /dev/null 2>&1 &
 SERVER_PID=$!
@@ -45,15 +53,26 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# 4. Let the server spin up for 2 seconds
-sleep 2
+# 5. Wait until server is actually ready (poll instead of fixed sleep)
+echo "[SYSTEM] Waiting for server..."
+for i in $(seq 1 20); do
+    if curl -s -o /dev/null http://localhost:8090/api/config 2>/dev/null; then
+        echo "[SYSTEM] Server is ready."
+        break
+    fi
+    if ! ps -p $SERVER_PID > /dev/null 2>&1; then
+        echo "[ERROR] Server failed to start. Check server.py errors."
+        exit 1
+    fi
+    sleep 0.5
+done
 
-# 5. Launch URL details
+# 6. Launch URL details
 APP_URL="http://localhost:8090/github-meter.html"
 WIDTH=930
 HEIGHT=310
 
-# 6. Launch Chrome/Edge in App Mode if available
+# 7. Launch Chrome/Edge in App Mode if available
 echo "[SYSTEM] Launching widget window..."
 
 if [ "$(uname)" == "Darwin" ]; then
@@ -65,10 +84,44 @@ if [ "$(uname)" == "Darwin" ]; then
             --user-data-dir="/tmp/GithubMeterProfile" \
             --disable-extensions \
             --no-first-run &
-        # Keep launcher running in foreground to capture cleanup trap
         wait
         exit 0
     fi
+fi
+
+# Linux Chrome/Chromium in app mode
+if command -v google-chrome &> /dev/null; then
+    google-chrome --app="$APP_URL" \
+        --window-size="$WIDTH","$HEIGHT" \
+        --user-data-dir="/tmp/GithubMeterProfile" \
+        --disable-extensions \
+        --no-first-run &
+    wait
+    exit 0
+elif command -v chromium-browser &> /dev/null; then
+    chromium-browser --app="$APP_URL" \
+        --window-size="$WIDTH","$HEIGHT" \
+        --user-data-dir="/tmp/GithubMeterProfile" \
+        --disable-extensions \
+        --no-first-run &
+    wait
+    exit 0
+elif command -v chromium &> /dev/null; then
+    chromium --app="$APP_URL" \
+        --window-size="$WIDTH","$HEIGHT" \
+        --user-data-dir="/tmp/GithubMeterProfile" \
+        --disable-extensions \
+        --no-first-run &
+    wait
+    exit 0
+elif command -v microsoft-edge &> /dev/null; then
+    microsoft-edge --app="$APP_URL" \
+        --window-size="$WIDTH","$HEIGHT" \
+        --user-data-dir="/tmp/GithubMeterProfile" \
+        --disable-extensions \
+        --no-first-run &
+    wait
+    exit 0
 fi
 
 # Fallback default browser launch

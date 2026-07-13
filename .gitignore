@@ -23,3 +23,6 @@ Desktop.ini
 *.njsproj
 *.sln
 *.swp
+
+# MiMoCode
+.mimocode/

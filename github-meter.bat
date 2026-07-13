@@ -17,7 +17,15 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: 2. Check for .env file
+:: 2. Check Python dependencies
+echo [SYSTEM] Checking Python dependencies...
+python -c "import selenium, dotenv" 2>nul
+if %errorlevel% neq 0 (
+    echo [SYSTEM] Installing required packages...
+    python -m pip install selenium python-dotenv webdriver-manager
+)
+
+:: 3. Check for .env file
 if not exist "%~dp0.env" (
     if exist "%~dp0.env.example" (
         echo [SYSTEM] Creating .env from .env.example...
@@ -30,20 +38,36 @@ if not exist "%~dp0.env" (
     )
 )
 
-:: 3. Start Background Python API & Web Server
+:: 4. Start Background Python API & Web Server
 echo [SYSTEM] Starting API server on port 8090...
 start /min "GitHub Meter Server" python "%~dp0server.py"
-set SERVER_PID=%errorlevel%
 
-:: 4. Let the server spin up for 2 seconds
-timeout /t 2 /nobreak >nul
+:: 5. Wait until server is ready
+echo [SYSTEM] Waiting for server...
+set "READY=0"
+for /l %%i in (1,1,20) do (
+    if "!READY!"=="0" (
+        powershell -Command "$r = try { (Invoke-WebRequest -Uri 'http://localhost:8090/api/config' -UseBasicParsing -TimeoutSec 1).StatusCode } catch { 0 }; if ($r -eq 200) { exit 0 } else { exit 1 }" 2>nul
+        if !errorlevel! equ 0 (
+            echo [SYSTEM] Server is ready.
+            set "READY=1"
+        ) else (
+            timeout /t 1 /nobreak >nul
+        )
+    )
+)
+if "!READY!"=="0" (
+    echo [ERROR] Server failed to start within 20 seconds.
+    pause
+    exit /b 1
+)
 
-:: 5. Configure window dimensions & screen placement
+:: 6. Configure window dimensions & screen placement
 set WIDTH=930
 set HEIGHT=310
 set MARGIN=40
 
-:: 6. Detect screen resolution via PowerShell
+:: 7. Detect screen resolution via PowerShell
 echo [SYSTEM] Optimizing window placement...
 for /f "delims=" %%a in ('powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width"') do set "SCR_W=%%a"
 for /f "delims=" %%a in ('powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height"') do set "SCR_H=%%a"
@@ -56,13 +80,13 @@ if "%SCR_H%"=="" set "SCR_H=1080"
 set /a POS_X=%SCR_W% - %WIDTH% - %MARGIN%
 set /a POS_Y=%SCR_H% - %HEIGHT% - %MARGIN% - 40
 
-:: 7. Set App URL
+:: 8. Set App URL
 set "APP_URL=http://localhost:8090/github-meter.html"
 
-:: 8. Launch Arguments
+:: 9. Launch Arguments
 set "ARGS=--app="%APP_URL%" --window-size=%WIDTH%,%HEIGHT% --window-position=%POS_X%,%POS_Y% --user-data-dir="%TEMP%\GithubMeterProfile" --disable-extensions --no-first-run"
 
-:: 9. Launch the Browser (Chrome preferred, Edge fallback)
+:: 10. Launch the Browser (Chrome preferred, Edge fallback)
 echo [SYSTEM] Launching widget window...
 
 if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (

@@ -380,157 +380,272 @@
 
     <script>
         const API_URL = 'http://localhost:8090/api';
+        const TIMEOUT_CONFIG = 5000;
+        const TIMEOUT_HTML = 5000;
+        const TIMEOUT_FETCH = 60000;
+        const DEBOUNCE_MS = 250;
         const tooltip = document.getElementById('tooltip');
         let currentYear = new Date().getFullYear().toString();
+        let tooltipInitialized = false;
+        let yearDebounce = null;
 
-        // Dynamically populate year dropdown from current year down to 5 years back
+        // Cache DOM references
+        const els = {
+            yearSelector: document.getElementById('year-selector'),
+            themeSelector: document.getElementById('theme-selector'),
+            displayName: document.getElementById('display-name'),
+            avatar: document.getElementById('avatar'),
+            profileLink: document.getElementById('profile-link'),
+            metaSubtitle: document.querySelector('.meta-subtitle'),
+            statsDisplay: document.getElementById('stats-display'),
+            calendarContainer: document.getElementById('calendar-container'),
+            refreshBtn: document.getElementById('refresh-btn'),
+        };
+
+        // Populate year dropdown: current year back to 2015
         function populateYearSelector() {
-            const selector = document.getElementById('year-selector');
             const thisYear = new Date().getFullYear();
-            for (let y = thisYear; y >= thisYear - 4; y--) {
+            const startYear = Math.max(thisYear - 9, 2015);
+            for (let y = thisYear; y >= startYear; y--) {
                 const opt = document.createElement('option');
                 opt.value = y;
                 opt.textContent = y;
-                selector.appendChild(opt);
+                els.yearSelector.appendChild(opt);
             }
-            selector.value = thisYear.toString();
+            els.yearSelector.value = thisYear.toString();
         }
 
-        // Dynamic theme management
+        // Theme management
         function changeTheme(themeName) {
-            document.body.className = `theme-${themeName}`;
-            localStorage.setItem('selected-theme', themeName);
+            for (const c of [...document.body.classList]) {
+                if (c.startsWith('theme-')) document.body.classList.remove(c);
+            }
+            document.body.classList.add(`theme-${themeName}`);
+            try { localStorage.setItem('selected-theme', themeName); } catch {}
         }
 
-        // Apply saved theme on load
-        const savedTheme = localStorage.getItem('selected-theme') || 'dracula';
-        document.getElementById('theme-selector').value = savedTheme;
+        function getSystemTheme() {
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dracula' : 'standard';
+        }
+
+        const savedTheme = localStorage.getItem('selected-theme') || getSystemTheme();
+        els.themeSelector.value = savedTheme;
         changeTheme(savedTheme);
 
-        // Year navigation callback
         async function changeYear(year) {
-            currentYear = year;
-            await loadCalendarHTML();
+            clearTimeout(yearDebounce);
+            yearDebounce = setTimeout(async () => {
+                currentYear = year;
+                try { localStorage.setItem('selected-year', year); } catch {}
+                await loadCalendarHTML();
+            }, DEBOUNCE_MS);
         }
 
         function setStatus(loading) {
-            const btn = document.getElementById('refresh-btn');
             if (loading) {
-                btn.classList.add('loading');
+                els.refreshBtn.classList.add('loading');
+                els.refreshBtn.disabled = true;
             } else {
-                btn.classList.remove('loading');
+                els.refreshBtn.classList.remove('loading');
+                els.refreshBtn.disabled = false;
             }
+        }
+
+        function fetchWithTimeout(url, ms) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), ms);
+            return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+        }
+
+        // Format join date nicely
+        const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+        function formatJoinDate(isoDate) {
+            if (!isoDate) return null;
+            const d = new Date(isoDate);
+            return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+        }
+
+        function yearsActive(isoDate) {
+            if (!isoDate) return null;
+            const joined = new Date(isoDate);
+            const now = new Date();
+            let years = now.getFullYear() - joined.getFullYear();
+            if (now.getMonth() < joined.getMonth() || (now.getMonth() === joined.getMonth() && now.getDate() < joined.getDate())) {
+                years--;
+            }
+            return years;
+        }
+
+        // Load account info from GitHub API
+        async function loadAccountInfo() {
+            try {
+                const res = await fetchWithTimeout(`${API_URL}/account`, TIMEOUT_CONFIG);
+                if (!res.ok) return;
+                const info = await res.json();
+                if (info.created_at) {
+                    const joined = formatJoinDate(info.created_at);
+                    const yrs = yearsActive(info.created_at);
+                    els.metaSubtitle.textContent = `Joined ${joined} \u00b7 ${yrs}y active \u00b7 GitHub Contributions \u2197`;
+                }
+            } catch {}
+        }
+
+        async function initConfig() {
+            populateYearSelector();
+
+            try {
+                const savedYear = localStorage.getItem('selected-year');
+                if (savedYear) currentYear = savedYear;
+            } catch {}
+            els.yearSelector.value = currentYear;
+
+            const configRes = await fetchWithTimeout(`${API_URL}/config`, TIMEOUT_CONFIG);
+            if (!configRes.ok) throw new Error("Server offline");
+            const config = await configRes.json();
+
+            els.displayName.textContent = `@${config.username}`;
+            els.avatar.src = `https://github.com/${config.username}.png`;
+            els.avatar.style.display = 'block';
+            els.profileLink.href = config.profile_url;
+
+            loadAccountInfo();
         }
 
         async function init() {
             try {
-                // Populate year dropdown dynamically
-                populateYearSelector();
-
-                // Get config
-                const configRes = await fetch(`${API_URL}/config`);
-                if (!configRes.ok) throw new Error("Server offline");
-                const config = await configRes.json();
-                
-                document.getElementById('display-name').textContent = `@${config.username}`;
-                document.getElementById('avatar').src = `https://github.com/${config.username}.png`;
-                document.getElementById('avatar').style.display = 'block';
-                document.getElementById('profile-link').href = config.profile_url;
-                
-                // currentYear is already set dynamically
-                document.getElementById('year-selector').value = currentYear;
-
+                await initConfig();
                 await loadCalendarHTML();
             } catch (err) {
                 console.error(err);
-                document.getElementById('stats-display').textContent = "Connection failed";
+                els.statsDisplay.textContent = "Connection failed";
+                showErrorState("Server offline. Is it running?");
             }
+        }
+
+        function showErrorState(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:11px;opacity:0.7;text-align:center;color:#ff5555;padding:20px;";
+            errorDiv.textContent = message;
+            const retryBtn = document.createElement('button');
+            retryBtn.textContent = "Retry";
+            retryBtn.style.cssText = "margin-top:8px;padding:4px 12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.06);color:inherit;border-radius:4px;cursor:pointer;font-size:10px;";
+            retryBtn.onclick = () => {
+                els.calendarContainer.replaceChildren();
+                loadCalendarHTML();
+            };
+            errorDiv.appendChild(document.createElement('br'));
+            errorDiv.appendChild(retryBtn);
+            els.calendarContainer.replaceChildren(errorDiv);
+            setStatus(false);
         }
 
         async function loadCalendarHTML() {
             try {
-                const res = await fetch(`data/contributions_${currentYear}.html`);
+                const res = await fetchWithTimeout(`data/contributions_${currentYear}.html`, TIMEOUT_HTML);
                 if (!res.ok) throw new Error(`No contribution cache for ${currentYear}. Please click refresh.`);
                 const html = await res.text();
-                
+
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = html;
-                
+
                 const table = tempDiv.querySelector('table.ContributionCalendar-grid');
-                const container = document.getElementById('calendar-container');
-                
-                if (table) {
-                    // Extract table.parentElement which preserves both the table AND sibling tool-tips!
-                    const parentDiv = table.parentElement;
-                    container.innerHTML = '';
-                    container.appendChild(parentDiv);
-                } else {
-                    container.innerHTML = html; // Fallback
+                if (!table) {
+                    throw new Error(`Invalid contribution data for ${currentYear}. Click refresh to re-scrape.`);
+                }
+                if (!tempDiv.querySelector('.ContributionCalendar-day')) {
+                    throw new Error(`No day cells found for ${currentYear}. Click refresh to re-scrape.`);
                 }
 
-                // Extract total count
+                const parentDiv = table.parentElement;
+                els.calendarContainer.replaceChildren(parentDiv);
+
                 const headerTextEl = tempDiv.querySelector('#js-contribution-activity-description');
                 if (headerTextEl) {
-                    const cleanText = headerTextEl.textContent.replace(/\s+/g, ' ').trim();
-                    document.getElementById('stats-display').textContent = cleanText;
+                    els.statsDisplay.textContent = headerTextEl.textContent.replace(/\s+/g, ' ').trim();
                 } else {
-                    document.getElementById('stats-display').textContent = `${currentYear} Contributions Calendar`;
+                    els.statsDisplay.textContent = `${currentYear} Contributions Calendar`;
+                }
+
+                // Use Last-Modified from the single fetch we already made (no second request)
+                const lastMod = res.headers.get('Last-Modified');
+                if (lastMod) {
+                    const modDate = new Date(lastMod);
+                    const timeStr = modDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const dateStr = modDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                    els.statsDisplay.textContent += ` \u00b7 Updated ${dateStr} ${timeStr}`;
                 }
 
                 setupTooltipListeners();
             } catch (err) {
-                document.getElementById('calendar-container').innerHTML = 
-                    `<div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; opacity: 0.7; text-align: center; color: #ff5555; padding: 20px;">
-                        ${err.message}<br><span style="font-size:10px; opacity:0.6;">Click the refresh button to trigger Selenium fetch.</span>
-                     </div>`;
-                document.getElementById('stats-display').textContent = "No data loaded";
+                console.error(err);
+                showErrorState(err.message);
+                els.statsDisplay.textContent = "No data loaded";
             }
         }
 
         async function triggerRefresh() {
             setStatus(true);
-            document.getElementById('stats-display').textContent = `Fetching contributions for ${currentYear}...`;
-            
+            els.statsDisplay.textContent = `Fetching contributions for ${currentYear}...`;
+
             try {
-                const res = await fetch(`${API_URL}/fetch?year=${currentYear}`);
-                if (!res.ok) throw new Error(`Failed to fetch contribution graph for ${currentYear}`);
+                const res = await fetchWithTimeout(`${API_URL}/fetch?year=${currentYear}`, TIMEOUT_FETCH);
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    throw new Error(body.message || `Failed to fetch for ${currentYear}`);
+                }
                 await loadCalendarHTML();
             } catch (err) {
-                alert(`Scraping Error: ${err.message}`);
-                document.getElementById('stats-display').textContent = "Fetch failed";
+                showErrorState(`Scraping Error: ${err.message}`);
+                els.statsDisplay.textContent = "Fetch failed";
             } finally {
                 setStatus(false);
             }
         }
 
+        let tooltipWidth = 0;
+        let tooltipHeight = 0;
+
         function setupTooltipListeners() {
-            const calendar = document.getElementById('calendar-container');
-            
-            calendar.addEventListener('mouseover', (e) => {
+            if (tooltipInitialized) return;
+            tooltipInitialized = true;
+
+            els.calendarContainer.addEventListener('mouseover', (e) => {
                 const day = e.target.closest('.ContributionCalendar-day');
                 if (day && day.id) {
-                    const rawTooltip = calendar.querySelector(`tool-tip[for="${day.id}"]`);
+                    const rawTooltip = document.querySelector(`tool-tip[for="${day.id}"]`);
                     if (rawTooltip) {
                         tooltip.textContent = rawTooltip.textContent.trim();
                         tooltip.classList.add('visible');
+                        // Cache dimensions once when tooltip becomes visible (avoids layout thrash)
+                        tooltipWidth = tooltip.offsetWidth;
+                        tooltipHeight = tooltip.offsetHeight;
                     }
                 }
             });
 
-            calendar.addEventListener('mousemove', (e) => {
+            els.calendarContainer.addEventListener('mousemove', (e) => {
                 if (tooltip.classList.contains('visible')) {
-                    tooltip.style.left = `${e.clientX + 12}px`;
-                    tooltip.style.top = `${e.clientY - 35}px`;
+                    let left = e.clientX + 12;
+                    let top = e.clientY - 35;
+                    if (left + tooltipWidth > window.innerWidth) left = e.clientX - tooltipWidth - 12;
+                    if (top < 0) top = 10;
+                    if (top + tooltipHeight > window.innerHeight) top = window.innerHeight - tooltipHeight - 10;
+                    tooltip.style.left = `${left}px`;
+                    tooltip.style.top = `${top}px`;
                 }
             });
 
-            calendar.addEventListener('mouseout', (e) => {
-                const day = e.target.closest('.ContributionCalendar-day');
-                if (day) {
+            els.calendarContainer.addEventListener('mouseout', (e) => {
+                if (e.target.closest('.ContributionCalendar-day')) {
                     tooltip.classList.remove('visible');
                 }
             });
         }
+
+        els.avatar.addEventListener('error', () => {
+            els.avatar.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%231f2937" width="40" height="40" rx="20"/><text x="20" y="26" text-anchor="middle" fill="%236b7280" font-size="18" font-family="sans-serif">?</text></svg>');
+        });
 
         window.addEventListener('DOMContentLoaded', init);
     </script>
